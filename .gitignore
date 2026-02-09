@@ -1,0 +1,29 @@
+# Binaries
+triagectl
+recon
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+triagectl-output/
+recon-output/
+artifacts/
+timeline.csv
+
+# Go
+go.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store

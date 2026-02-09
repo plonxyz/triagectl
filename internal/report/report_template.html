@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>triagectl — {{.Hostname}}</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2129;--border:#30363d;--text:#c9d1d9;--text-muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--orange:#db6d28;--red:#f85149;--purple:#bc8cff;--sidebar-w:230px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+
+/* Sidebar */
+#sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;z-index:100;display:flex;flex-direction:column}
+#sidebar .logo{padding:14px 16px;font-weight:700;font-size:1em;border-bottom:1px solid var(--border);color:var(--accent)}
+#sidebar nav{flex:1;padding:6px 0;font-size:0.82em}
+#sidebar .nav-group{color:var(--text-muted);font-size:0.7em;text-transform:uppercase;letter-spacing:0.8px;padding:10px 16px 4px;font-weight:600}
+#sidebar nav a{display:flex;justify-content:space-between;align-items:center;padding:5px 16px 5px 24px;color:var(--text-muted);text-decoration:none;border-left:3px solid transparent;transition:all 0.15s}
+#sidebar nav a:hover{background:rgba(88,166,255,0.06);color:var(--text)}
+#sidebar nav a.active{border-left-color:var(--accent);color:var(--accent);background:rgba(88,166,255,0.08)}
+#sidebar .count{font-size:0.8em;background:var(--border);color:var(--text-muted);padding:0 5px;border-radius:8px;min-width:18px;text-align:center}
+#sidebar .kb{padding:10px 16px;border-top:1px solid var(--border);font-size:0.72em;color:var(--text-muted)}
+#sidebar .kb kbd{background:var(--border);padding:1px 4px;border-radius:3px;font-family:inherit}
+
+/* Main */
+main{margin-left:var(--sidebar-w);padding:20px 28px;max-width:1400px}
+
+/* Toolbar */
+.toolbar{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border);margin-bottom:16px}
+.toolbar input[type="text"]{flex:1;min-width:200px;padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85em;outline:none}
+.toolbar input[type="text"]:focus{border-color:var(--accent)}
+.toolbar input[type="text"]::placeholder{color:var(--text-muted)}
+
+/* Header */
+.header-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+.header-card h1{font-size:1.5em;margin-bottom:2px}
+.header-card .sub{color:var(--text-muted);font-size:0.82em}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:14px}
+.info-item{display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:0.82em}
+.info-item .lbl{color:var(--text-muted)}
+.info-item .val{font-weight:600}
+.stats-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:100px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center}
+.stat-card .label{color:var(--text-muted);font-size:0.7em;text-transform:uppercase;letter-spacing:0.5px}
+.stat-card .val{font-size:1.3em;font-weight:700;margin-top:2px}
+
+/* Sections */
+section{margin-bottom:16px}
+.section-header{display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.section-header h2{font-size:1.05em;color:var(--accent);margin:0;border:none;padding:0}
+.section-header .toggle{color:var(--text-muted);font-size:0.75em;transition:transform 0.2s}
+.section-header.collapsed .toggle{transform:rotate(-90deg)}
+.section-body{padding:8px 0}
+.section-header.collapsed+.section-body{display:none}
+.section-note{color:var(--text-muted);font-size:0.8em;font-style:italic;padding:4px 0 8px}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:0.82em}
+th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--text-muted);font-weight:600;font-size:0.75em;text-transform:uppercase;position:sticky;top:48px;z-index:10}
+th[data-sort]{cursor:pointer;user-select:none}
+th[data-sort]:hover{color:var(--accent)}
+th[data-sort]::after{content:" \21C5";opacity:0.3;font-size:0.9em}
+th[data-sort].asc::after{content:" \2191";opacity:1}
+th[data-sort].desc::after{content:" \2193";opacity:1}
+tr:hover{background:rgba(88,166,255,0.04)}
+tr.hidden-search{display:none}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:0.72em;font-weight:600;text-transform:uppercase}
+.badge-ok{background:rgba(63,185,80,0.2);color:var(--green);border:1px solid var(--green)}
+.badge-warn{background:rgba(248,81,73,0.2);color:var(--red);border:1px solid var(--red)}
+.risk-score{display:inline-block;padding:2px 7px;border-radius:12px;font-size:0.72em;font-weight:600;font-family:'SF Mono',SFMono-Regular,Consolas,monospace}
+.risk-low{background:rgba(63,185,80,0.15);color:var(--green);border:1px solid rgba(63,185,80,0.4)}
+.risk-med{background:rgba(210,153,34,0.2);color:var(--yellow);border:1px solid rgba(210,153,34,0.5)}
+.risk-high{background:rgba(219,109,40,0.2);color:var(--orange);border:1px solid var(--orange)}
+.risk-crit{background:rgba(248,81,73,0.2);color:var(--red);border:1px solid var(--red)}
+.tag{display:inline-block;padding:1px 5px;margin:1px;border-radius:3px;font-size:0.68em;background:rgba(88,166,255,0.1);color:var(--accent);border:1px solid rgba(88,166,255,0.2)}
+.tag a{color:var(--purple);text-decoration:none}
+.tag a:hover{text-decoration:underline}
+.tag.ioc{background:rgba(255,100,100,0.12);color:var(--red);border-color:rgba(255,100,100,0.3)}
+
+/* Posture */
+.posture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.posture-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center}
+
+/* Expandable findings */
+tr.expandable{cursor:pointer}
+tr.expandable td:first-child::before{content:"\25B6";display:inline-block;margin-right:5px;font-size:0.55em;transition:transform 0.15s;vertical-align:middle;color:var(--text-muted)}
+tr.expandable.open td:first-child::before{transform:rotate(90deg)}
+tr.detail-row{display:none;background:var(--surface2)}
+tr.detail-row.open{display:table-row}
+tr.detail-row td{padding:10px 14px}
+tr.detail-row pre{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;overflow-x:auto;font-size:0.8em;max-height:280px;overflow-y:auto;margin-top:6px}
+
+/* Timeline */
+.tl-row{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82em}
+.tl-row.hidden-search{display:none}
+.tl-time{color:var(--text-muted);font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:0.82em;min-width:140px;flex-shrink:0}
+.tl-type{min-width:100px;flex-shrink:0;color:var(--text-muted);font-size:0.82em}
+.tl-content{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.truncate{max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:0.88em}
+.empty{color:var(--text-muted);padding:10px;font-size:0.85em}
+
+/* Pagination */
+.pager{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:0.8em;color:var(--text-muted);border-top:1px solid var(--border)}
+.pager-btns{display:flex;gap:4px}
+.pager-btns button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.85em}
+.pager-btns button:hover{background:var(--surface2);border-color:var(--accent)}
+.pager-btns button:disabled{opacity:0.3;cursor:default}
+.pager-btns button.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.pager-info{font-size:0.85em}
+.pager select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:2px 4px;border-radius:3px;font-size:0.85em}
+
+/* Footer */
+footer{text-align:center;color:var(--text-muted);font-size:0.75em;margin-top:20px;padding:14px;border-top:1px solid var(--border)}
+
+/* Print */
+@media print{
+#sidebar{display:none}main{margin-left:0}.toolbar{display:none}
+th{position:static}.section-header.collapsed+.section-body{display:block}
+tr.detail-row.open{display:table-row}body{background:#fff;color:#000}
+.header-card,.stat-card,.posture-card,.info-item{border-color:#ccc}
+}
+@media(max-width:768px){#sidebar{display:none}main{margin-left:0;padding:12px}.info-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div id="sidebar">
+<div class="logo">triagectl</div>
+<nav>
+<div class="nav-group">Overview</div>
+<a href="#case-overview">Case Overview</a>
+<a href="#findings">Findings <span class="count">{{len .Findings}}</span></a>
+
+<div class="nav-group">System</div>
+<a href="#security-config">Security Config <span class="count">{{len .SecurityPosture}}</span></a>
+<a href="#tcc">TCC Permissions <span class="count">{{len .TCCPermissions}}</span></a>
+<a href="#env">Environment <span class="count">{{len .Environment}}</span></a>
+
+<div class="nav-group">Accounts &amp; Auth</div>
+<a href="#accounts">User Accounts <span class="count">{{len .UserAccounts}}</span></a>
+<a href="#ssh">SSH Artifacts <span class="count">{{len .SSHArtifacts}}</span></a>
+
+<div class="nav-group">Execution</div>
+<a href="#processes">Processes <span class="count">{{len .Processes}}</span></a>
+<a href="#apps">Installed Apps <span class="count">{{len .InstalledApps}}</span></a>
+<a href="#persistence">Persistence <span class="count">{{len .Persistence}}</span></a>
+
+<div class="nav-group">User Activity</div>
+<a href="#browser">Browser History <span class="count">{{len .BrowserHistory}}</span></a>
+<a href="#shell">Shell History <span class="count">{{len .ShellHistory}}</span></a>
+<a href="#downloads">Downloads &amp; Files <span class="count">{{len .Downloads}}</span></a>
+<a href="#app-usage">App Usage <span class="count">{{len .AppUsage}}</span></a>
+
+<div class="nav-group">Network &amp; Logs</div>
+<a href="#network">Network <span class="count">{{len .Network}}</span></a>
+<a href="#logs">Logs <span class="count">{{len .Logs}}</span></a>
+<a href="#timeline">Timeline <span class="count">{{len .AllTimeline}}</span></a>
+
+<div class="nav-group">Appendix</div>
+<a href="#stats">Collector Stats <span class="count">{{len .CollectorStats}}</span></a>
+</nav>
+<div class="kb"><kbd>/</kbd> Search &middot; <kbd>Esc</kbd> Clear</div>
+</div>
+
+<main>
+
+<!-- Toolbar -->
+<div class="toolbar">
+<input type="text" id="search" placeholder="Search across all sections... ( / )">
+</div>
+
+<!-- ==================== CASE OVERVIEW ==================== -->
+<section id="case-overview">
+<div class="header-card">
+<h1>{{.Hostname}}</h1>
+<div class="sub">Generated {{.GeneratedAt}} &middot; Collection duration: {{.Duration}}</div>
+
+<div class="info-grid">
+<div class="info-item"><span class="lbl">Hostname</span><span class="val">{{.Hostname}}</span></div>
+<div class="info-item"><span class="lbl">OS</span><span class="val">{{.OS}} {{.OSVersion}}</span></div>
+{{if .BuildVersion}}<div class="info-item"><span class="lbl">Build</span><span class="val">{{.BuildVersion}}</span></div>{{end}}
+{{if .KernelVersion}}<div class="info-item"><span class="lbl">Kernel</span><span class="val">{{.KernelVersion}}</span></div>{{end}}
+{{if .SerialNumber}}<div class="info-item"><span class="lbl">Serial Number</span><span class="val mono">{{.SerialNumber}}</span></div>{{end}}
+{{if .Architecture}}<div class="info-item"><span class="lbl">Architecture</span><span class="val">{{.Architecture}}</span></div>{{end}}
+{{if .NumCPUs}}<div class="info-item"><span class="lbl">CPUs</span><span class="val">{{.NumCPUs}}</span></div>{{end}}
+{{if .Uptime}}<div class="info-item"><span class="lbl">Uptime</span><span class="val">{{.Uptime}}</span></div>{{end}}
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="label">Artifacts</div><div class="val">{{.TotalArtifacts}}</div></div>
+<div class="stat-card"><div class="label">Collectors</div><div class="val">{{.CollectorsRun}}</div></div>
+<div class="stat-card"><div class="label">Findings</div><div class="val" style="color:{{if gt .FindingsCount 0}}var(--orange){{else}}var(--green){{end}}">{{.FindingsCount}}</div></div>
+</div>
+</div>
+</section>
+
+<!-- ==================== FINDINGS ==================== -->
+<section id="findings">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Findings &amp; IOC Matches</h2></div>
+<div class="section-body">
+<div class="section-note">Artifacts with risk score >= 40. Click a row to expand raw data.</div>
+{{if .Findings}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="collector">Source</th>
+<th data-sort="summary">Summary</th>
+<th data-sort="score" data-sort-type="number">Score</th>
+<th>Tags</th>
+</tr></thead>
+<tbody>
+{{range $i, $f := .Findings}}
+<tr class="expandable" data-row-id="f{{$i}}">
+<td>{{$f.ArtifactType}}</td>
+<td>{{$f.CollectorID}}</td>
+<td class="truncate">{{$f.Summary}}</td>
+<td data-sort-value="{{$f.RiskScore}}"><span class="risk-score" data-risk="{{$f.RiskScore}}">{{$f.RiskScore}}</span></td>
+<td>{{range $f.Tags}}<span class="tag">{{.}}</span>{{end}}</td>
+</tr>
+<tr class="detail-row" data-parent-id="f{{$i}}">
+<td colspan="5"><strong>{{$f.Summary}}</strong><pre>{{$f.DataJSON}}</pre></td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No findings with risk score >= 40.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== SECURITY CONFIGURATION ==================== -->
+<section id="security-config">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Security Configuration</h2></div>
+<div class="section-body">
+<div class="section-note">macOS security subsystem status.</div>
+{{if .SecurityPosture}}
+<div class="posture-grid">
+{{range .SecurityPosture}}
+<div class="posture-card">
+<span>{{.Name}}</span>
+{{if .Enabled}}<span class="badge badge-ok">Enabled</span>{{else}}<span class="badge badge-warn">Disabled / Unknown</span>{{end}}
+</div>
+{{end}}
+</div>
+{{else}}<div class="empty">No security posture data. Run gatekeeper, firewall, filevault collectors.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== TCC PERMISSIONS ==================== -->
+<section id="tcc">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>TCC Privacy Permissions</h2></div>
+<div class="section-body">
+<div class="section-note">Transparency, Consent, and Control database. Shows which apps have been granted privacy-sensitive access.</div>
+{{if .TCCPermissions}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="service">Service</th>
+<th data-sort="client">Client</th>
+<th data-sort="auth">Auth Value</th>
+<th data-sort="db">Database</th>
+</tr></thead>
+<tbody>
+{{range .TCCPermissions}}
+<tr>
+<td>{{.Service}}</td>
+<td class="truncate mono">{{.Client}}</td>
+<td>{{.AuthValue}}</td>
+<td>{{.DBType}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No TCC data. Run tcc_permissions collector (may require elevated privileges).</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== ENVIRONMENT VARIABLES ==================== -->
+<section id="env">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Environment Variables</h2></div>
+<div class="section-body">
+<div class="section-note">Suspicious variables (DYLD_INSERT_LIBRARIES, LD_PRELOAD, etc.) indicate potential library injection.</div>
+{{if .Environment}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="key">Variable</th>
+<th data-sort="value">Value</th>
+<th data-sort="reason">Reason</th>
+<th data-sort="risk" data-sort-type="number">Risk</th>
+</tr></thead>
+<tbody>
+{{range .Environment}}
+<tr>
+<td class="mono">{{.Key}}</td>
+<td class="truncate mono">{{.Value}}</td>
+<td>{{.Reason}}</td>
+<td data-sort-value="{{.RiskScore}}">{{if gt .RiskScore 0}}<span class="risk-score" data-risk="{{.RiskScore}}">{{.RiskScore}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No environment data. Run environment collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== USER ACCOUNTS ==================== -->
+<section id="accounts">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>User Accounts</h2></div>
+<div class="section-body">
+<div class="section-note">Local accounts from Directory Services. Check for unauthorized or suspicious accounts.</div>
+{{if .UserAccounts}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="user">Username</th>
+<th data-sort="real">Real Name</th>
+<th data-sort="uid" data-sort-type="number">UID</th>
+<th data-sort="home">Home Directory</th>
+<th data-sort="shell">Shell</th>
+</tr></thead>
+<tbody>
+{{range .UserAccounts}}
+<tr>
+<td class="mono">{{.Username}}</td>
+<td>{{.RealName}}</td>
+<td>{{.UID}}</td>
+<td class="truncate mono">{{.Home}}</td>
+<td class="mono">{{.Shell}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No user account data. Run user_accounts collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== SSH ARTIFACTS ==================== -->
+<section id="ssh">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>SSH Keys &amp; Configuration</h2></div>
+<div class="section-body">
+<div class="section-note">SSH keys, authorized_keys, known_hosts, and config files. Check for unauthorized keys or configs.</div>
+{{if .SSHArtifacts}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="path">Path</th>
+<th data-sort="detail">Detail</th>
+<th data-sort="risk" data-sort-type="number">Risk</th>
+</tr></thead>
+<tbody>
+{{range .SSHArtifacts}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate mono">{{.Path}}</td>
+<td class="truncate">{{.Detail}}</td>
+<td data-sort-value="{{.RiskScore}}">{{if gt .RiskScore 0}}<span class="risk-score" data-risk="{{.RiskScore}}">{{.RiskScore}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No SSH data. Run ssh_config collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== PROGRAM EXECUTION ==================== -->
+<section id="processes">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Running Processes</h2></div>
+<div class="section-body">
+<div class="section-note">Process snapshot at collection time. Flagged processes sorted first. Look for executables in /tmp, hidden names, suspicious tools.</div>
+{{if .Processes}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="pid" data-sort-type="number">PID</th>
+<th data-sort="ppid" data-sort-type="number">PPID</th>
+<th data-sort="name">Name</th>
+<th data-sort="user">User</th>
+<th data-sort="exe">Executable</th>
+<th data-sort="cpu" data-sort-type="number">CPU%</th>
+<th data-sort="mem" data-sort-type="number">Mem%</th>
+<th data-sort="risk" data-sort-type="number">Risk</th>
+</tr></thead>
+<tbody>
+{{range .Processes}}
+<tr>
+<td data-sort-value="{{.PID}}">{{.PID}}</td>
+<td data-sort-value="{{.PPID}}">{{.PPID}}</td>
+<td>{{.Name}}</td>
+<td>{{.User}}</td>
+<td class="truncate mono">{{.Exe}}</td>
+<td data-sort-value="{{.CPU}}">{{.CPU}}</td>
+<td data-sort-value="{{.Mem}}">{{.Mem}}</td>
+<td data-sort-value="{{.RiskScore}}">{{if gt .RiskScore 0}}<span class="risk-score" data-risk="{{.RiskScore}}">{{.RiskScore}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No process data. Run running_processes collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== INSTALLED APPLICATIONS ==================== -->
+<section id="apps">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Installed Applications</h2></div>
+<div class="section-body">
+<div class="section-note">Applications in /Applications and ~/Applications. Check for unauthorized tools, remote access software, or recently installed apps.</div>
+{{if .InstalledApps}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="name">Application</th>
+<th data-sort="source">Source</th>
+<th data-sort="path">Path</th>
+<th data-sort="mod">Last Modified</th>
+</tr></thead>
+<tbody>
+{{range .InstalledApps}}
+<tr>
+<td>{{.Name}}</td>
+<td>{{.Source}}</td>
+<td class="truncate mono">{{.Path}}</td>
+<td class="mono">{{.ModTime}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No application data. Run installed_apps collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== PERSISTENCE ==================== -->
+<section id="persistence">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Persistence Mechanisms</h2></div>
+<div class="section-body">
+<div class="section-note">LaunchAgents, LaunchDaemons, Login Items, cron jobs, and extensions. Key indicator for malware establishing foothold.</div>
+{{if .Persistence}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="name">Name / Identifier</th>
+<th data-sort="path">Plist / Path</th>
+<th data-sort="prog">Program / Content</th>
+<th data-sort="risk" data-sort-type="number">Risk</th>
+</tr></thead>
+<tbody>
+{{range .Persistence}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td>{{.Name}}</td>
+<td class="truncate mono">{{.Path}}</td>
+<td class="truncate mono">{{.Program}}</td>
+<td data-sort-value="{{.RiskScore}}">{{if gt .RiskScore 0}}<span class="risk-score" data-risk="{{.RiskScore}}">{{.RiskScore}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No persistence data. Run launch_agents, scheduled_tasks, login_items collectors.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== BROWSER HISTORY ==================== -->
+<section id="browser">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Browser History</h2></div>
+<div class="section-body">
+<div class="section-note">Safari and Chrome visit history. Check for malicious downloads, phishing sites, C2 panels, or webshells.</div>
+{{if .BrowserHistory}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Browser</th>
+<th data-sort="summary">URL / Title</th>
+<th data-sort="time">Visit Time</th>
+</tr></thead>
+<tbody>
+{{range .BrowserHistory}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td class="mono">{{.EventTime}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No browser history. Run browser_history collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== SHELL HISTORY ==================== -->
+<section id="shell">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Shell Command History</h2></div>
+<div class="section-body">
+<div class="section-note">Bash and Zsh history. Look for reconnaissance commands, data exfiltration, lateral movement, or LOLBins.</div>
+{{if .ShellHistory}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Shell</th>
+<th data-sort="summary">Command</th>
+<th data-sort="time">Time</th>
+</tr></thead>
+<tbody>
+{{range .ShellHistory}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td class="mono">{{.EventTime}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No shell history. Run shell_history collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== DOWNLOADS & FILE ACTIVITY ==================== -->
+<section id="downloads">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Downloads &amp; File Activity</h2></div>
+<div class="section-body">
+<div class="section-note">Quarantine events (com.apple.quarantine) and recently accessed files. Tracks what was downloaded and from where.</div>
+{{if .Downloads}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="summary">Detail</th>
+<th data-sort="time">Time</th>
+</tr></thead>
+<tbody>
+{{range .Downloads}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td class="mono">{{.EventTime}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No download/file data. Run quarantine_events, recent_files collectors.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== APP USAGE ==================== -->
+<section id="app-usage">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Application Usage (KnowledgeC)</h2></div>
+<div class="section-body">
+<div class="section-note">App usage and screen time from KnowledgeC.db. Shows which applications were actively used and when.</div>
+{{if .AppUsage}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="summary">Application</th>
+<th data-sort="time">Time</th>
+</tr></thead>
+<tbody>
+{{range .AppUsage}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td class="mono">{{.EventTime}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No app usage data. Run knowledgec collector.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== NETWORK ==================== -->
+<section id="network">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Network Activity</h2></div>
+<div class="section-body">
+<div class="section-note">Active connections, interfaces, ARP cache, and open network files. Check for C2 beacons, tunnels, and lateral movement.</div>
+{{if .Network}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Type</th>
+<th data-sort="detail">Details</th>
+<th data-sort="risk" data-sort-type="number">Risk</th>
+</tr></thead>
+<tbody>
+{{range .Network}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td data-sort-value="{{.RiskScore}}">{{if gt .RiskScore 0}}<span class="risk-score" data-risk="{{.RiskScore}}">{{.RiskScore}}</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No network data. Run network_connections, open_files collectors.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== LOG ANALYSIS ==================== -->
+<section id="logs">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Log Analysis</h2></div>
+<div class="section-body">
+<div class="section-note">Unified logs (security, network, process, errors), crash reports, and install logs.</div>
+{{if .Logs}}
+<table class="filterable sortable" data-page-size="100">
+<thead><tr>
+<th data-sort="type">Category</th>
+<th data-sort="summary">Entry</th>
+<th data-sort="time">Time</th>
+</tr></thead>
+<tbody>
+{{range .Logs}}
+<tr>
+<td>{{.ArtifactType}}</td>
+<td class="truncate">{{.Summary}}</td>
+<td class="mono">{{.Time}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}<div class="empty">No log data. Run unified_logs, system_logs collectors.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== TIMELINE ==================== -->
+<section id="timeline">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Timeline</h2></div>
+<div class="section-body">
+<div class="section-note">All artifacts sorted chronologically. Use search to narrow down.</div>
+{{if .AllTimeline}}
+<div id="timeline-list">
+{{range .AllTimeline}}
+<div class="tl-row">
+<div class="tl-time">{{.EventTime}}</div>
+<div class="tl-type">{{.ArtifactType}}</div>
+<div class="tl-content">{{.Summary}}</div>
+</div>
+{{end}}
+</div>
+{{else}}<div class="empty">No timeline events.</div>{{end}}
+</div>
+</section>
+
+<!-- ==================== COLLECTOR STATS ==================== -->
+<section id="stats">
+<div class="section-header" onclick="toggleSection(this)"><span class="toggle">&#9660;</span><h2>Collector Statistics</h2></div>
+<div class="section-body">
+{{if .CollectorStats}}
+<table class="sortable">
+<thead><tr>
+<th data-sort="id">Collector</th>
+<th data-sort="count" data-sort-type="number">Artifacts</th>
+<th data-sort="dur">Duration</th>
+<th>Status</th>
+</tr></thead>
+<tbody>
+{{range .CollectorStats}}
+<tr>
+<td>{{.ID}}</td>
+<td data-sort-value="{{.Count}}">{{.Count}}</td>
+<td>{{.Duration}}</td>
+<td>{{if .Success}}<span class="badge badge-ok">OK</span>{{else}}<span class="badge badge-warn">Failed</span>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
+</div>
+</section>
+
+<footer>triagectl &middot; Generated {{.GeneratedAt}}</footer>
+</main>
+
+<script>
+function toggleSection(h){h.classList.toggle('collapsed')}
+
+/* Search */
+var si=document.getElementById('search');
+si.addEventListener('input',function(){var t=this.value.toLowerCase();
+document.querySelectorAll('.filterable tbody tr:not(.detail-row)').forEach(function(r){
+var m=!t||r.textContent.toLowerCase().indexOf(t)!==-1;
+if(m)r.classList.remove('hidden-search');else r.classList.add('hidden-search')});
+document.querySelectorAll('.tl-row').forEach(function(r){
+var m=!t||r.textContent.toLowerCase().indexOf(t)!==-1;
+if(m)r.classList.remove('hidden-search');else r.classList.add('hidden-search')})});
+
+document.addEventListener('keydown',function(e){
+if(e.key==='/'&&document.activeElement!==si){e.preventDefault();si.focus()}
+if(e.key==='Escape'){si.value='';si.dispatchEvent(new Event('input'));si.blur()}});
+
+/* Column sorting */
+document.querySelectorAll('th[data-sort]').forEach(function(th){
+th.addEventListener('click',function(){var table=this.closest('table'),tbody=table.querySelector('tbody'),
+idx=Array.prototype.indexOf.call(this.parentNode.children,this),isNum=this.dataset.sortType==='number',
+asc=!this.classList.contains('asc');
+this.parentNode.querySelectorAll('th').forEach(function(h){h.classList.remove('asc','desc')});
+this.classList.add(asc?'asc':'desc');
+var rows=Array.from(tbody.querySelectorAll('tr:not(.detail-row)'));
+rows.sort(function(a,b){var av=a.children[idx]?(a.children[idx].dataset.sortValue||a.children[idx].textContent.trim()):'',
+bv=b.children[idx]?(b.children[idx].dataset.sortValue||b.children[idx].textContent.trim()):'';
+if(isNum)return asc?(parseFloat(av)||0)-(parseFloat(bv)||0):(parseFloat(bv)||0)-(parseFloat(av)||0);
+return asc?av.localeCompare(bv):bv.localeCompare(av)});
+rows.forEach(function(r){tbody.appendChild(r);
+var d=tbody.querySelector('tr[data-parent-id="'+r.dataset.rowId+'"]');if(d)tbody.appendChild(d)});
+var tbl=this.closest('table');if(tbl._pgState){tbl._pgState.page=0;if(tbl._pgRender)tbl._pgRender();}})});
+
+/* Expandable finding rows */
+document.querySelectorAll('tr.expandable').forEach(function(r){
+r.addEventListener('click',function(){this.classList.toggle('open');
+var d=this.nextElementSibling;if(d&&d.classList.contains('detail-row'))d.classList.toggle('open')})});
+
+/* IOC tag styling */
+document.querySelectorAll('.tag').forEach(function(t){if(t.textContent.trim().startsWith('ioc_match'))t.classList.add('ioc')});
+
+/* Risk score colorization */
+document.querySelectorAll('.risk-score').forEach(function(el){
+var v=parseInt(el.dataset.risk)||0;
+if(v>=80)el.classList.add('risk-crit');
+else if(v>=60)el.classList.add('risk-high');
+else if(v>=40)el.classList.add('risk-med');
+else el.classList.add('risk-low')});
+
+/* Sidebar nav: click sets active + scroll tracking */
+var navLinks=document.querySelectorAll('#sidebar nav a');
+navLinks.forEach(function(link){
+link.addEventListener('click',function(){
+navLinks.forEach(function(a){a.classList.remove('active')});
+this.classList.add('active')})});
+
+var sections=document.querySelectorAll('main > section[id]');
+var scrollTimer;
+window.addEventListener('scroll',function(){
+clearTimeout(scrollTimer);
+scrollTimer=setTimeout(function(){
+var current='';
+sections.forEach(function(s){
+var rect=s.getBoundingClientRect();
+if(rect.top<=120)current=s.id});
+if(current){navLinks.forEach(function(a){a.classList.remove('active')});
+var l=document.querySelector('#sidebar nav a[href="#'+current+'"]');
+if(l)l.classList.add('active')}},50)});
+
+/* Set initial active */
+if(navLinks.length>0)navLinks[0].classList.add('active');
+
+/* Pagination */
+function initPagination(){
+document.querySelectorAll('table[data-page-size]').forEach(function(table){
+var ps=parseInt(table.dataset.pageSize)||100;
+var tbody=table.querySelector('tbody');if(!tbody)return;
+var allRows=Array.from(tbody.querySelectorAll('tr:not(.detail-row)'));
+if(allRows.length<=ps)return;/* no pagination needed for small tables */
+
+var pager=document.createElement('div');pager.className='pager';
+table.parentNode.insertBefore(pager,table.nextSibling);
+
+table._pgState={page:0,size:ps,pager:pager};
+
+function getVisibleRows(t){
+var rows=Array.from(t.querySelector('tbody').querySelectorAll('tr:not(.detail-row)'));
+return rows.filter(function(r){return !r.classList.contains('hidden-search')});}
+
+function renderPage(t){
+var st=t._pgState,rows=getVisibleRows(t),total=rows.length,pages=Math.ceil(total/st.size);
+if(st.page>=pages)st.page=Math.max(0,pages-1);
+rows.forEach(function(r,i){
+var show=i>=st.page*st.size&&i<(st.page+1)*st.size;
+r.style.display=show?'':'none';
+var d=r.nextElementSibling;
+if(d&&d.classList.contains('detail-row'))d.style.display=show&&d.classList.contains('open')?'table-row':'none';
+});
+var start=total?st.page*st.size+1:0,end=Math.min((st.page+1)*st.size,total);
+var h='<span class="pager-info">'+start+'-'+end+' of '+total+'</span>';
+h+='<span class="pager-btns">';
+h+='<button data-pg="first"'+(st.page===0?' disabled':'')+'>&#171;</button>';
+h+='<button data-pg="prev"'+(st.page===0?' disabled':'')+'>&#8249;</button>';
+var maxBtns=5,startP=Math.max(0,st.page-2),endP=Math.min(pages,startP+maxBtns);
+if(endP-startP<maxBtns)startP=Math.max(0,endP-maxBtns);
+for(var p=startP;p<endP;p++){
+h+='<button data-pg="'+p+'"'+(p===st.page?' class="active"':'')+'>'+String(p+1)+'</button>';}
+h+='<button data-pg="next"'+(st.page>=pages-1?' disabled':'')+'>&#8250;</button>';
+h+='<button data-pg="last"'+(st.page>=pages-1?' disabled':'')+'>&#187;</button>';
+h+=' <select data-pg="size">';
+[50,100,250,500].forEach(function(n){h+='<option value="'+n+'"'+(n===st.size?' selected':'')+'>'+n+'/page</option>';});
+h+='</select></span>';
+st.pager.innerHTML=h;
+st.pager.querySelectorAll('button[data-pg]').forEach(function(b){
+b.addEventListener('click',function(){
+var a=this.dataset.pg,p=pages;
+if(a==='first')st.page=0;
+else if(a==='prev')st.page=Math.max(0,st.page-1);
+else if(a==='next')st.page=Math.min(p-1,st.page+1);
+else if(a==='last')st.page=p-1;
+else st.page=parseInt(a);
+renderPage(t);});});
+st.pager.querySelector('select[data-pg="size"]').addEventListener('change',function(){
+st.size=parseInt(this.value);st.page=0;renderPage(t);});}
+
+renderPage(table);
+table._pgRender=function(){renderPage(table);};});}
+
+initPagination();
+
+/* Hook search into pagination */
+var origSearch=si.oninput;
+si.addEventListener('input',function(){
+setTimeout(function(){
+document.querySelectorAll('table[data-page-size]').forEach(function(t){
+if(t._pgState){t._pgState.page=0;if(t._pgRender)t._pgRender();}});},10);});
+
+/* Timeline pagination */
+(function(){
+var tl=document.getElementById('timeline-list');if(!tl)return;
+var rows=Array.from(tl.querySelectorAll('.tl-row'));
+if(rows.length<=100)return;
+var pg={page:0,size:100};
+var pager=document.createElement('div');pager.className='pager';
+tl.parentNode.insertBefore(pager,tl.nextSibling);
+
+function render(){
+var vis=rows.filter(function(r){return !r.classList.contains('hidden-search')});
+var total=vis.length,pages=Math.ceil(total/pg.size);
+if(pg.page>=pages)pg.page=Math.max(0,pages-1);
+vis.forEach(function(r,i){
+r.style.display=(i>=pg.page*pg.size&&i<(pg.page+1)*pg.size)?'':'none';});
+var s=total?pg.page*pg.size+1:0,e=Math.min((pg.page+1)*pg.size,total);
+var h='<span class="pager-info">'+s+'-'+e+' of '+total+'</span>';
+h+='<span class="pager-btns">';
+h+='<button data-pg="prev"'+(pg.page===0?' disabled':'')+'>&#8249; Prev</button>';
+h+='<span style="padding:0 8px">Page '+(pg.page+1)+' / '+pages+'</span>';
+h+='<button data-pg="next"'+(pg.page>=pages-1?' disabled':'')+'>Next &#8250;</button></span>';
+pager.innerHTML=h;
+pager.querySelectorAll('button').forEach(function(b){
+b.addEventListener('click',function(){
+if(this.dataset.pg==='prev')pg.page=Math.max(0,pg.page-1);
+else pg.page=Math.min(pages-1,pg.page+1);
+render();});});}
+render();
+si.addEventListener('input',function(){setTimeout(function(){pg.page=0;render();},10);});
+})();
+</script>
+</body>
+</html>
