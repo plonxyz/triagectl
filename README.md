@@ -282,7 +282,7 @@ internal/
 
 ## License
 
-MIT
+GPL-3.0
 
 ## Disclaimer
 
