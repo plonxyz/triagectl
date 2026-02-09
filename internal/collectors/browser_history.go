@@ -15,7 +15,7 @@ type BrowserHistoryCollector struct{}
 
 func (c *BrowserHistoryCollector) ID() string          { return "browser_history" }
 func (c *BrowserHistoryCollector) Name() string        { return "Browser History" }
-func (c *BrowserHistoryCollector) Description() string { return "Collects browser history from Safari, Chrome, Firefox" }
+func (c *BrowserHistoryCollector) Description() string { return "Collects browser history from Safari and Chrome" }
 func (c *BrowserHistoryCollector) RequiresRoot() bool  { return false }
 
 func (c *BrowserHistoryCollector) Collect(ctx context.Context) ([]models.Artifact, error) {

@@ -1,6 +1,6 @@
 # triagectl
 
-A fast, single-binary macOS triage tool for Digital Forensics and Incident Response (DFIR). Collects 26 artifact types, runs automated analysis, and outputs to SQLite, CSV, HTML, and Timesketch-compatible timeline formats.
+A fast, single-binary macOS triage tool for Digital Forensics and Incident Response (DFIR). 26 collectors, automated analysis, and outputs to SQLite, CSV, HTML, and Timesketch-compatible timeline formats.
 
 ## Features
 
@@ -282,7 +282,7 @@ internal/
 
 ## License
 
-MIT
+GPL-3.0
 
 ## Disclaimer
 
