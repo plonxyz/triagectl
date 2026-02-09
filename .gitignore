@@ -16,7 +16,6 @@ artifacts/
 timeline.csv
 
 # Go
-go.sum
 
 # IDE
 .vscode/
