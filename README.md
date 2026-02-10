@@ -285,5 +285,5 @@ internal/
 GPL-3.0
 
 ## Disclaimer
-
+This is a personal project. Not affiliated with my employer.
 This tool is intended for authorized forensic investigations and incident response only. Always obtain proper authorization before running on any system.
